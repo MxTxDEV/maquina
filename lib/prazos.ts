@@ -1,7 +1,7 @@
 // Regras de prazo do Financeiro.
+// Padrões (ajustáveis em Configurações):
 // - Dia útil: segunda a sábado, exceto feriados (sábado conta; domingo não).
-// - Vale (adiantamento): pago dia 20. Se cair em domingo, sábado ou feriado, paga ANTES (último dia útil
-//   anterior que não seja sábado). Pronto 2 dias antes do pagamento.
+// - Vale (adiantamento): pago dia 20. Se cair em fim de semana ou feriado, paga ANTES. Pronto 2 dias antes.
 // - Folha: paga no 5º dia útil do mês. Pronta até o 1º dia útil do mês.
 
 export type Prazo = {
@@ -9,6 +9,24 @@ export type Prazo = {
   titulo: string
   pagamento: Date
   pronto: Date
+}
+
+export type Regras = {
+  sabadoUtil: boolean
+  valeDia: number
+  valeProntoAntes: number
+  folhaPagamentoDiaUtil: number
+  folhaProntoDiaUtil: number
+  feriadosExtras: string[]
+}
+
+export const REGRAS_PADRAO: Regras = {
+  sabadoUtil: true,
+  valeDia: 20,
+  valeProntoAntes: 2,
+  folhaPagamentoDiaUtil: 5,
+  folhaProntoDiaUtil: 1,
+  feriadosExtras: [],
 }
 
 const dia = (y: number, m: number, d: number) => new Date(y, m, d)
@@ -56,7 +74,8 @@ export function feriados(ano: number, extras: string[] = []): Set<string> {
 }
 
 const ehFeriado = (d: Date, extras?: string[]) => feriados(d.getFullYear(), extras).has(chave(d))
-export const ehDiaUtil = (d: Date, extras?: string[]) => d.getDay() !== 0 && !ehFeriado(d, extras)
+export const ehDiaUtil = (d: Date, r: Regras = REGRAS_PADRAO) =>
+  d.getDay() !== 0 && (r.sabadoUtil || d.getDay() !== 6) && !ehFeriado(d, r.feriadosExtras)
 
 function anterior(d: Date, aceita: (x: Date) => boolean): Date {
   const x = new Date(d)
@@ -65,25 +84,31 @@ function anterior(d: Date, aceita: (x: Date) => boolean): Date {
 }
 
 /** N-ésimo dia útil do mês (sábado conta). */
-export function nDiaUtil(ano: number, mes: number, n: number, extras?: string[]): Date {
+export function nDiaUtil(ano: number, mes: number, n: number, r: Regras = REGRAS_PADRAO): Date {
   const d = dia(ano, mes, 1)
   let c = 0
   while (true) {
-    if (ehDiaUtil(d, extras)) c++
+    if (ehDiaUtil(d, r)) c++
     if (c === n) return new Date(d)
     d.setDate(d.getDate() + 1)
   }
 }
 
-export function prazosDoMes(ano: number, mes: number, extras?: string[]): Prazo[] {
-  // Vale: dia 20; fim de semana ou feriado paga antes (último dia de semana útil anterior).
-  const valePag = anterior(dia(ano, mes, 20), (x) => x.getDay() !== 0 && x.getDay() !== 6 && !ehFeriado(x, extras))
-  const valePronto = anterior(dia(ano, mes, valePag.getDate() - 2), (x) => ehDiaUtil(x, extras))
-  const folhaPag = nDiaUtil(ano, mes, 5, extras)
-  const folhaPronto = nDiaUtil(ano, mes, 1, extras)
+export function prazosDoMes(ano: number, mes: number, r: Regras = REGRAS_PADRAO): Prazo[] {
+  // Vale: fim de semana ou feriado paga antes (último dia de semana útil anterior).
+  const valePag = anterior(
+    dia(ano, mes, r.valeDia),
+    (x) => x.getDay() !== 0 && x.getDay() !== 6 && !ehFeriado(x, r.feriadosExtras)
+  )
+  const valePronto = anterior(dia(ano, mes, valePag.getDate() - r.valeProntoAntes), (x) => ehDiaUtil(x, r))
   return [
     { id: 'vale', titulo: 'Vale adiantamento', pagamento: valePag, pronto: valePronto },
-    { id: 'folha', titulo: 'Folha de pagamento', pagamento: folhaPag, pronto: folhaPronto },
+    {
+      id: 'folha',
+      titulo: 'Folha de pagamento',
+      pagamento: nDiaUtil(ano, mes, r.folhaPagamentoDiaUtil, r),
+      pronto: nDiaUtil(ano, mes, r.folhaProntoDiaUtil, r),
+    },
   ]
 }
 

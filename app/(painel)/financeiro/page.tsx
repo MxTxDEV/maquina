@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { diasAte, prazosDoMes, type Prazo } from '@/lib/prazos'
+import { useConfig } from '@/lib/config'
 import { conferir, lerCsv, type ResumoFolha } from '@/lib/folha'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -25,6 +26,7 @@ export default function Financeiro() {
     () => hojeCliente,
     () => null
   )
+  const config = useConfig()
   const [resumo, setResumo] = useState<ResumoFolha | null>(null)
   const [erro, setErro] = useState('')
 
@@ -42,7 +44,7 @@ export default function Financeiro() {
   // Mostra os prazos do mês atual e do próximo, só os que ainda não passaram do pagamento.
   const prazos: Prazo[] = hoje
     ? [0, 1]
-        .flatMap((i) => prazosDoMes(hoje.getFullYear(), hoje.getMonth() + i))
+        .flatMap((i) => prazosDoMes(hoje.getFullYear(), hoje.getMonth() + i, config))
         .filter((p) => diasAte(p.pagamento, hoje) >= 0)
         .sort((a, b) => a.pagamento.getTime() - b.pagamento.getTime())
     : []
